@@ -1,55 +1,38 @@
-import { createClient } from "@supabase/supabase-js";
+import express from "express";
 import nodemailer from "nodemailer";
+import cors from "cors";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY 
-);
+const app = express();
+app.use(cors());
+app.use(express.json());
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
+app.post("/api/send-email", async (req, res) => {
   try {
-    const { hrId, to, subject, body } = req.body;
-
-    if (!hrId || !to || !subject || !body) {
-      return res.status(400).json({ error: "Missing required fields" });
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("hr_mail_profiles")
-      .select("*")
-      .eq("hr_id", hrId)
-      .single();
-
-    if (profileError || !profile) {
-      return res.status(404).json({ error: "SMTP profile not found" });
-    }
+    const { smtp, mailOptions } = req.body;
 
     const transporter = nodemailer.createTransport({
-      host: profile.smtp_host,
-      port: profile.smtp_port,
-      secure: profile.smtp_port === 465, 
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.port === 465, 
       auth: {
-        user: profile.smtp_user,
-        pass: profile.smtp_pass,
+        user: smtp.user,
+        pass: smtp.pass,
       },
     });
 
     const info = await transporter.sendMail({
-      from: `"${profile.from_name || profile.smtp_user}" <${profile.from_email}>`,
-      to,
-      subject,
-      html: body,
+      from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
+      to: mailOptions.to,
+      subject: mailOptions.subject,
+      text: mailOptions.text,
+      html: mailOptions.html,
     });
 
-    console.log("Email sent:", info.messageId);
-
-    return res.status(200).json({ success: true, messageId: info.messageId });
+    res.json({ success: true, info });
   } catch (err) {
-    console.error("send-email error:", err);
-    return res.status(500).json({ error: "Internal server error" });
+    console.error("Error sending email:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
-}
+});
+
+export default app;
