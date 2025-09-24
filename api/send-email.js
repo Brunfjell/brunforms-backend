@@ -1,4 +1,3 @@
-// api/send-email.js
 import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 
